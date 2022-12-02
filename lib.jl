@@ -1,6 +1,7 @@
 using Statistics
 
 using DSP
+using QuadGK
 using PortAudio
 using PyPlot
 using Unitful
@@ -20,8 +21,9 @@ struct Sample
 end
 
 function make_white_noise(duration::Time, samplefreq::Frequency)
-	numsamples = Int(floor(duration * samplefreq))
-	return 2 * rand(numsamples) .- 1
+    numsamples = Int(floor(duration * samplefreq))
+    data = 2 * rand(numsamples) .- 1
+    return Sample(samplefreq, data)
 end
 	
 # See https://dsp.stackexchange.com/a/17367
@@ -37,7 +39,7 @@ function make_chirp(startfreq::Frequency, endfreq::Frequency, duration::Time, sa
 
     data = amplitude * sin.(omega1*t + (omega2 - omega1)/duration * t.^2/2)
 
-    return Sample(duration, samplefreq, data)
+    return Sample(samplefreq, data)
 end
 
 function make_chord(frequencies::Array, duration::Time, samplefreq::Frequency;
@@ -51,6 +53,17 @@ function make_chord(frequencies::Array, duration::Time, samplefreq::Frequency;
     for freq in frequencies
 	data += amplitude * sin.(2pi * freq * t)
     end
+
+    return Sample(samplefreq, data)
+end
+
+function make_var_freq(freqfunc, duration::Time, samplefreq::Frequency; starttime=0s, amplitude=1)
+    timestep = 1/samplefreq
+    endtime = duration - eps(Float64)s
+    t = starttime:timestep:endtime
+
+    integral = first.(quadgk.(freqfunc, starttime, t))
+    data = amplitude * sin.(integral)
 
     return Sample(samplefreq, data)
 end
@@ -70,7 +83,7 @@ function play(ostream::PortAudioStream, sample::Sample)
 end
 
 function play(sample::Sample)
-    ostream = PortAudioStream("Built-in Output", 0, 1, samplerate=ustrip(uconvert(Hz, sample.samplefreq)))
+    ostream = PortAudioStream(0, 1)
     play(ostream, sample)
 end
 
@@ -93,7 +106,7 @@ function listen(istream::PortAudioStream, duration::Time)
 end
 
 function listen(duration::Time)
-    istream = PortAudioStream("Built-in Microphone", 1, 0)
+    istream = PortAudioStream(1, 0)
 
     return listen(istream, duration)
 end
@@ -141,14 +154,15 @@ function plot_spectrogram(sample::Sample;
     firsttime, lasttime = timerange
     firstfreq, lastfreq = freqrange
     firsttime = firsttime == :auto ? first(times) : firsttime
-    lasttime = lasttime == :auto ? last(times) : lasttime
+    lasttime = lasttime == :auto ? last(times) : lasttimed
     firstfreq = firstfreq == :auto ? first(frequencies) * ustrip(sample.samplefreq) : firstfreq
     lastfreq = lastfreq == :auto ? last(frequencies) * ustrip(sample.samplefreq) : lastfreq
 
     # Translate into image coords, with highest frequencies first
     image = reverse(powers, dims=1)
-
-    imshow(image, extent=[firsttime, lasttime, firstfreq, lastfreq], aspect="auto", cmap="binary")
+    freqidx(freq) = length(frequencies) - Int(floor((freq/ustrip(sample.samplefreq) - first(frequencies)) / (last(frequencies) - first(frequencies)) * (length(frequencies) - 1)))
+	timeidx(time) = 1 + Int(floor((time - first(times)) / (last(times) - first(times)) * (length(times) - 1)))
+    imshow(image[freqidx(lastfreq):freqidx(firstfreq),timeidx(firsttime):timeidx(lasttime)], extent=[firsttime, lasttime, firstfreq, lastfreq], aspect="auto", cmap="binary")
 
     return spect
 end
