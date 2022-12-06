@@ -51,7 +51,7 @@ function make_chord(frequencies::Array, duration::Time, samplefreq::Frequency;
 
     data = zeros(length(t))
     for freq in frequencies
-	data += amplitude * sin.(2pi * freq * t)
+        data += amplitude * sin.(2pi * freq * t)
     end
 
     return Sample(samplefreq, data)
@@ -72,6 +72,18 @@ function make_pause(duration::Time, samplefreq::Frequency)
     data = zeros(Int(floor(samplefreq * duration)))
 
     return Sample(samplefreq, data)
+end
+
+function upsample(sample::Sample, newfreq::Frequency)
+    ratio = Int(floor(newfreq/sample.samplefreq))
+    @assert(ratio >= 2)
+    data = zeros(ratio*length(sample.data))
+    for i = 0:length(sample.data)-1
+        for j = 0:ratio-1
+            data[i*ratio + j + 1] = sample.data[i + 1]
+        end
+    end
+    return Sample(newfreq, data)
 end
 
 # =============================================================================
