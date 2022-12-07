@@ -1,4 +1,6 @@
 include("lib.jl")
+using FFTW
+using Polynomials
 
 """
     critband(sample::Sample)
@@ -24,25 +26,61 @@ between successive windows.
 See Rhythm and Transforms p. 105-106
 """
 function energyfeature(sample::Sample; windowsize=0.01s, windowoverlap=0.005s)
+    res = mapwindows(w -> sum(w.^2), sample, windowsize, windowoverlap)
+
+    return Sample(res.samplefreq, fdiff(res.data))
+end
+
+"""
+    groupdelay(sapmle::Sample; windowsize=0.01s, windowoverlap=0.005s)
+
+TBW
+"""
+function groupdelay(sample::Sample; windowsize=0.01s, windowoverlap=0.005s)
+    function processwindow(window)
+        coeffs = fft(window)
+        unwrap!(map!(angle, coeffs, coeffs))
+        # fit a line to the unwrapped phases, returning the slope
+        poly = Polynomials.fit(1:length(coeffs), coeffs, 1)
+        return poly.coeffs[1]
+    end
+    res = mapwindows(processwindow, sample, windowsize, windowoverlap)
+
+    return res
+end
+
+function mapwindows(func, sample::Sample, windowsize, windowoverlap)::Sample
     samples_per_slice = Int(floor(sample.samplefreq * windowsize))
     sample_overlap = Int(floor(sample.samplefreq * windowoverlap))
     slicestep = samples_per_slice - sample_overlap
-
     slicecount = Int(floor((length(sample.data) - sample_overlap) / slicestep))
+
     featurefreq = Int(floor(ustrip(sample.samplefreq) / slicestep))*Hz
-    featuredata = zeros(slicecount - 1) # - 1 because we take differences
-    
-    firstwindow = view(sample.data, 1:samples_per_slice+1)
-    currenergy = sum(firstwindow .^ 2)
-    for widx = 1:slicecount - 1
-        wstart = 1 + widx * slicestep
+    featuredata = zeros(slicecount)
+
+    for widx = 1:slicecount
+        woff = widx - 1
+        wstart = 1 + woff * slicestep
         window = view(sample.data, wstart:wstart+samples_per_slice)
-        energy = sum(window.^2)
-        featuredata[widx] = energy - currenergy
-        currenergy = energy
+        featuredata[widx] = func(window)
     end
 
     return Sample(featurefreq, featuredata)
+end
+
+function fdiff(xs::Array)
+    if length(xs) < 2
+        return []
+    end
+
+    res = zeros(eltype(xs), length(xs) - 1)
+    xcurr = xs[1]
+    for i = 2:length(xs)
+        res[i-1] = xs[i] - xcurr
+        xcurr = xs[i]
+    end
+
+    return res
 end
 
 """
