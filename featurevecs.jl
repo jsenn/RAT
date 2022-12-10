@@ -1,4 +1,6 @@
 include("lib.jl")
+include("util.jl")
+
 using FFTW
 using Polynomials
 
@@ -32,21 +34,39 @@ function energyfeature(sample::Sample; windowsize=0.01s, windowoverlap=0.005s)
 end
 
 """
-    groupdelay(sapmle::Sample; windowsize=0.01s, windowoverlap=0.005s)
+    groupdelayfeature(sapmle::Sample; windowsize=0.01s, windowoverlap=0.005s)
 
 TBW
 """
-function groupdelay(sample::Sample; windowsize=0.01s, windowoverlap=0.005s)
+function groupdelayfeature(sample::Sample; windowsize=0.01s, windowoverlap=0.005s)
     function processwindow(window)
-        coeffs = fft(window)
-        unwrap!(map!(angle, coeffs, coeffs))
+        coeffs = rfft(window)
+        phases = unwrap(map(angle, coeffs))
         # fit a line to the unwrapped phases, returning the slope
-        poly = Polynomials.fit(1:length(coeffs), coeffs, 1)
+        poly = Polynomials.fit(1:lastindex(phases), phases, 1)
         return poly.coeffs[1]
     end
     res = mapwindows(processwindow, sample, windowsize, windowoverlap)
 
     return res
+end
+
+function bin2freq(bin, samplefreq, nfft)
+    return bin * samplefreq/nfft
+end
+
+function spectralcenter(xs, samplefreq)
+    idx = weightedmedian(abs.(rfft(xs)))
+    return bin2freq(idx, samplefreq, length(xs))
+end
+
+function spectralcenterfeature(sample::Sample; windowsize=0.01s, windowoverlap=0.005s)
+    function processwindow(window)
+        return ustrip(spectralcenter(window, sample.samplefreq))
+    end
+    res = mapwindows(processwindow, sample, windowsize, windowoverlap)
+
+    return Sample(res.samplefreq, fdiff(res.data))
 end
 
 function mapwindows(func, sample::Sample, windowsize, windowoverlap)::Sample
