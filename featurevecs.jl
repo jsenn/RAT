@@ -5,7 +5,7 @@ using FFTW
 using Polynomials
 
 """
-    critband(sample::Sample)
+    critband(sample::SampleBuf)
 
 Calculate a series of feature vectors from the given `sample` containing the
 amount of energy in each of many frequency bands. This is done in with a
@@ -16,29 +16,29 @@ filters simulating the Critical Bands.
 
 See Rhythm and Transforms p. 103-104
 """
-function critband(sample::Sample)
+function critband(sample::SampleBuf)
 end
 
 """
-    energyfeature(sample::Sample; windowsize=0.01s, windowoverlap=0.005s)
+    energyfeature(sample::SampleBuf; windowsize=0.01s, windowoverlap=0.005s)
 
 Calculates the energy in windows of the given sample, returning the difference
 between successive windows.
 
 See Rhythm and Transforms p. 105-106
 """
-function energyfeature(sample::Sample; windowsize=0.01s, windowoverlap=0.005s)
+function energyfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005)
     res = mapwindows(w -> sum(w.^2), sample, windowsize, windowoverlap)
 
-    return Sample(res.samplefreq, fdiff(res.data))
+    return SampleBuf(fdiff(res.data), res.samplerate)
 end
 
 """
-    groupdelayfeature(sapmle::Sample; windowsize=0.01s, windowoverlap=0.005s)
+    groupdelayfeature(sapmle::SampleBuf; windowsize=0.01s, windowoverlap=0.005s)
 
 TBW
 """
-function groupdelayfeature(sample::Sample; windowsize=0.01s, windowoverlap=0.005s)
+function groupdelayfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005)
     function processwindow(window)
         coeffs = rfft(window)
         phases = unwrap(map(angle, coeffs))
@@ -51,31 +51,31 @@ function groupdelayfeature(sample::Sample; windowsize=0.01s, windowoverlap=0.005
     return res
 end
 
-function bin2freq(bin, samplefreq, nfft)
-    return bin * samplefreq/nfft
+function bin2freq(bin, samplerate, nfft)
+    return bin * samplerate/nfft
 end
 
-function spectralcenter(xs, samplefreq)
+function spectralcenter(xs, samplerate)
     idx = weightedmedian(abs.(rfft(xs)))
-    return bin2freq(idx, samplefreq, length(xs))
+    return bin2freq(idx, samplerate, length(xs))
 end
 
-function spectralcenterfeature(sample::Sample; windowsize=0.01s, windowoverlap=0.005s)
+function spectralcenterfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005)
     function processwindow(window)
-        return ustrip(spectralcenter(window, sample.samplefreq))
+        return spectralcenter(window, sample.samplerate)
     end
     res = mapwindows(processwindow, sample, windowsize, windowoverlap)
 
-    return Sample(res.samplefreq, fdiff(res.data))
+    return SampleBuf(fdiff(res.data), res.samplerate)
 end
 
-function mapwindows(func, sample::Sample, windowsize, windowoverlap)::Sample
-    samples_per_slice = Int(floor(sample.samplefreq * windowsize))
-    sample_overlap = Int(floor(sample.samplefreq * windowoverlap))
+function mapwindows(func, sample::SampleBuf, windowsize, windowoverlap)::SampleBuf
+    samples_per_slice = Int(floor(sample.samplerate * windowsize))
+    sample_overlap = Int(floor(sample.samplerate * windowoverlap))
     slicestep = samples_per_slice - sample_overlap
     slicecount = Int(floor((length(sample.data) - sample_overlap) / slicestep))
 
-    featurefreq = Int(floor(ustrip(sample.samplefreq) / slicestep))*Hz
+    featurefreq = Int(floor(sample.samplerate / slicestep))
     featuredata = zeros(slicecount)
 
     for widx = 1:slicecount
@@ -85,7 +85,7 @@ function mapwindows(func, sample::Sample, windowsize, windowoverlap)::Sample
         featuredata[widx] = func(window)
     end
 
-    return Sample(featurefreq, featuredata)
+    return SampleBuf(featuredata, featurefreq)
 end
 
 function fdiff(xs::Array)
@@ -104,26 +104,26 @@ function fdiff(xs::Array)
 end
 
 """
-    listenablefeature(feature::Sample)
+    listenablefeature(feature::SampleBuf)
 
 Upsample the given feature sample to audio rates (44100Hz), then modulate with
 noise, in order to be able to listen to the feature.
 
 See Rhythm and Transforms p. 104-105
 """
-function listenablefeature(feature::Sample)
-    featureup = upsample(feature, 44100Hz)
+function listenablefeature(feature::SampleBuf)
+    featureup = upsample(feature, 44100)
     featureup.data .*= 2 * rand(length(featureup.data)) .- 1
     return featureup
 end
 
 """
-    playfeature(feature::Sample)
+    playfeature(feature::SampleBuf)
 
 Play an audio signal that corresponds to the given feature vector.
 
 See listenablefeature.
 """
-function playfeature(feature::Sample)
+function playfeature(feature::SampleBuf)
     play(listenablefeature(feature))
 end
