@@ -16,6 +16,27 @@ function partialsum(xs)
 end
 
 """
+    fdiff(xs::Array)
+
+Returns an array of length `length(xs) - 1` whose `i`th entry is `x[i+1] - x[i]`.
+This is (almost) the inverse of `partialsum`.
+"""
+function fdiff(xs::Array)
+    if length(xs) < 2
+        return []
+    end
+
+    res = zeros(eltype(xs), length(xs) - 1)
+    xcurr = xs[1]
+    for i = 2:length(xs)
+        res[i-1] = xs[i] - xcurr
+        xcurr = xs[i]
+    end
+
+    return res
+end
+
+"""
     weightedmedian(xs; residual=false)
 
 Return the index `imin` where the residual `sum(xs[i:end]) - sum(xs[1:i])`
