@@ -70,20 +70,13 @@ function spectralcenterfeature(sample::SampleBuf; windowsize=0.01, windowoverlap
 end
 
 function mapwindows(func, sample::SampleBuf, windowsize, windowoverlap)::SampleBuf
-    samples_per_slice = Int(floor(sample.samplerate * windowsize))
-    sample_overlap = Int(floor(sample.samplerate * windowoverlap))
-    slicestep = samples_per_slice - sample_overlap
-    slicecount = Int(floor((length(sample.data) - sample_overlap) / slicestep))
+    windowsize = Int(floor(sample.samplerate * windowsize))
+    windowoverlap = Int(floor(sample.samplerate * windowoverlap))
+    slicestep = windowsize - windowoverlap
+    as = arraysplit(sample.data, windowsize, windowoverlap)
 
     featurefreq = Int(floor(sample.samplerate / slicestep))
-    featuredata = zeros(slicecount)
-
-    for widx = 1:slicecount
-        woff = widx - 1
-        wstart = 1 + woff * slicestep
-        window = view(sample.data, wstart:wstart+samples_per_slice)
-        featuredata[widx] = func(window)
-    end
+    featuredata = map(func, as)
 
     return SampleBuf(featuredata, featurefreq)
 end
