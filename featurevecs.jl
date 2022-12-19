@@ -27,8 +27,8 @@ between successive windows.
 
 See Rhythm and Transforms p. 105-106
 """
-function energyfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005)
-    res = mapwindows(w -> sum(w.^2), sample, windowsize, windowoverlap)
+function energyfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005, windowfunc=DSP.hanning)
+    res = mapwindows(w -> sum(w.^2), sample, windowsize, windowoverlap; windowfunc=windowfunc)
 
     return SampleBuf(fdiff(res.data), res.samplerate)
 end
@@ -38,7 +38,7 @@ end
 
 TBW
 """
-function groupdelayfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005)
+function groupdelayfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005, windowfunc=DSP.hanning)
     function processwindow(window)
         coeffs = rfft(window)
         phases = unwrap(map(angle, coeffs))
@@ -46,7 +46,7 @@ function groupdelayfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.0
         poly = Polynomials.fit(1:lastindex(phases), phases, 1)
         return poly.coeffs[1]
     end
-    res = mapwindows(processwindow, sample, windowsize, windowoverlap)
+    res = mapwindows(processwindow, sample, windowsize, windowoverlap; windowfunc=windowfunc)
 
     return res
 end
@@ -55,28 +55,66 @@ function bin2freq(bin, samplerate, nfft)
     return bin * samplerate/nfft
 end
 
-function spectralcenter(xs, samplerate)
-    idx = weightedmedian(abs.(rfft(xs)))
-    return bin2freq(idx, samplerate, length(xs))
+function spectralcenter(xs::Array, samplerate::Number)
+    #idx = weightedmedian(abs.(rfft(xs)))
+    #return bin2freq(idx, samplerate, length(xs))
+    mag = abs.(rfft(xs))
+    frq = rfftfreq(length(xs), samplerate)
+    return sum(frq .* mag) / sum(mag)
 end
 
-function spectralcenterfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005)
+"""
+    spectralcenterfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005)
+
+Calculates the spectral center of windows of the given sample, returning the
+difference between successive windows. The spectral center is defined as the
+weighted median of the magnitudes of the FFT of the window.
+
+See Rhythm and Transforms p. 106
+"""
+function spectralcenterfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005, windowfunc=DSP.hanning)
     function processwindow(window)
         return spectralcenter(window, sample.samplerate)
     end
-    res = mapwindows(processwindow, sample, windowsize, windowoverlap)
+    res = mapwindows(processwindow, sample, windowsize, windowoverlap; windowfunc=windowfunc)
 
     return SampleBuf(fdiff(res.data), res.samplerate)
 end
 
-function mapwindows(func, sample::SampleBuf, windowsize, windowoverlap)::SampleBuf
+function spectraldispersion(xs::Array, samplerate::Number)
+    spec = abs.(rfft(xs))
+    freqs = rfftfreq(length(xs), samplerate)
+    fc = bin2freq(weightedmedian(spec), samplerate, length(xs))
+    return sum((spec .^ 2) .* abs.(freqs .- fc))
+end
+
+"""
+    spectraldispersionfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005)
+
+Calculates the spectral dispersion of windows of the given sample, returning the
+difference between successive windows. The spectral dispersion is defined as the
+weighted median of the magnitudes of the FFT of the window.
+
+See Rhythm and Transforms p. 106
+"""
+function spectraldispersionfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005, windowfunc=DSP.hanning)
+    function processwindow(window)
+        return spectraldispersion(window, sample.samplerate)
+    end
+    res = mapwindows(processwindow, sample, windowsize, windowoverlap; windowfunc=windowfunc)
+
+    return SampleBuf(fdiff(res.data), res.samplerate)
+end
+
+function mapwindows(func, sample::SampleBuf, windowsize, windowoverlap; windowfunc=DSP.rect)::SampleBuf
     windowsize = Int(floor(sample.samplerate * windowsize))
     windowoverlap = Int(floor(sample.samplerate * windowoverlap))
     slicestep = windowsize - windowoverlap
+    window = windowfunc(windowsize)
     as = arraysplit(sample.data, windowsize, windowoverlap)
 
     featurefreq = Int(floor(sample.samplerate / slicestep))
-    featuredata = map(func, as)
+    featuredata = map(seg -> func(window .* seg), as)
 
     return SampleBuf(featuredata, featurefreq)
 end
@@ -84,7 +122,7 @@ end
 """
     listenablefeature(feature::SampleBuf)
 
-Upsample the given feature sample to audio rates (44100Hz), then modulate with
+Upsample the given feature sample to audio rate (44100Hz), then modulate with
 noise, in order to be able to listen to the feature.
 
 See Rhythm and Transforms p. 104-105
