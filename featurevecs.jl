@@ -8,8 +8,8 @@ using Polynomials
     critband(sample::SampleBuf)
 
 Calculate a series of feature vectors from the given `sample` containing the
-amount of energy in each of many frequency bands. This is done in with a
-rolling window, so that 
+amount of energy in each of many overlapping frequency bands (bandwith of ~1/3
+octave)
 
 This is meant to mimic the function of the Basilar Membrane, with the bandpass
 filters simulating the Critical Bands.
@@ -27,7 +27,7 @@ between successive windows.
 
 See Rhythm and Transforms p. 105-106
 """
-function energyfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005, windowfunc=DSP.hanning)
+function energyfeature(sample::SampleBuf; windowsize=1024, windowoverlap=div(windowsize,2), windowfunc=DSP.hanning)
     res = mapwindows(w -> sum(w.^2), sample, windowsize, windowoverlap; windowfunc=windowfunc)
 
     diff = fdiff(res.data)
@@ -41,7 +41,7 @@ end
 
 TBW
 """
-function groupdelayfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005, windowfunc=DSP.hanning)
+function groupdelayfeature(sample::SampleBuf; windowsize=1024, windowoverlap=div(windowsize,2), windowfunc=DSP.hanning)
     function processwindow(window)
         coeffs = rfft(window)
         phases = unwrap(map(angle, coeffs))
@@ -74,7 +74,7 @@ weighted median of the magnitudes of the FFT of the window.
 
 See Rhythm and Transforms p. 106
 """
-function spectralcenterfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005, windowfunc=DSP.hanning)
+function spectralcenterfeature(sample::SampleBuf; windowsize=1024, windowoverlap=div(windowsize,2), windowfunc=DSP.hanning)
     function processwindow(window)
         return spectralcenter(window, sample.samplerate)
     end
@@ -102,7 +102,7 @@ weighted median of the magnitudes of the FFT of the window.
 
 See Rhythm and Transforms p. 106
 """
-function spectraldispersionfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005, windowfunc=DSP.hanning)
+function spectraldispersionfeature(sample::SampleBuf; windowsize=1024, windowoverlap=div(windowsize,2), windowfunc=DSP.hanning)
     function processwindow(window)
         return spectraldispersion(window, sample.samplerate)
     end
@@ -115,8 +115,6 @@ function spectraldispersionfeature(sample::SampleBuf; windowsize=0.01, windowove
 end
 
 function mapwindows(func, sample::SampleBuf, windowsize, windowoverlap; windowfunc=DSP.rect)::SampleBuf
-    windowsize = Int(floor(sample.samplerate * windowsize))
-    windowoverlap = Int(floor(sample.samplerate * windowoverlap))
     slicestep = windowsize - windowoverlap
     window = windowfunc(windowsize)
     as = arraysplit(sample.data, windowsize, windowoverlap)
@@ -128,15 +126,15 @@ function mapwindows(func, sample::SampleBuf, windowsize, windowoverlap; windowfu
 end
 
 """
-    listenablefeature(feature::SampleBuf)
+    listenablefeature(feature::SampleBuf; samplerate=44100)
 
-Upsample the given feature sample to audio rate (44100Hz), then modulate with
-noise, in order to be able to listen to the feature.
+Upsample the given feature sample to audio rate (default 44100Hz), then
+modulate with noise, in order to be able to listen to the feature.
 
 See Rhythm and Transforms p. 104-105
 """
-function listenablefeature(feature::SampleBuf)
-    featureup = upsample(feature, 44100)
+function listenablefeature(feature::SampleBuf; samplerate=44100)
+    featureup = upsample(feature, samplerate)
     featureup.data .*= 2 * rand(length(featureup.data)) .- 1
     return featureup
 end
