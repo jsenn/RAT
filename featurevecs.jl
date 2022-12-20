@@ -5,21 +5,6 @@ using FFTW
 using Polynomials
 
 """
-    critband(sample::SampleBuf)
-
-Calculate a series of feature vectors from the given `sample` containing the
-amount of energy in each of many overlapping frequency bands (bandwith of ~1/3
-octave)
-
-This is meant to mimic the function of the Basilar Membrane, with the bandpass
-filters simulating the Critical Bands.
-
-See Rhythm and Transforms p. 103-104
-"""
-function critband(sample::SampleBuf)
-end
-
-"""
     energyfeature(sample::SampleBuf; windowsize=0.01s, windowoverlap=0.005s)
 
 Calculates the energy in windows of the given sample, returning the difference
@@ -58,6 +43,10 @@ end
 
 function bin2freq(bin, samplerate, nfft)
     return bin * samplerate/nfft
+end
+
+function freq2bin(freq, samplerate, nfft)
+    return Int(round(freq * nfft / samplerate))
 end
 
 function spectralcenter(xs::Array, samplerate::Number)
