@@ -30,7 +30,10 @@ See Rhythm and Transforms p. 105-106
 function energyfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.005, windowfunc=DSP.hanning)
     res = mapwindows(w -> sum(w.^2), sample, windowsize, windowoverlap; windowfunc=windowfunc)
 
-    return SampleBuf(fdiff(res.data), res.samplerate)
+    diff = fdiff(res.data)
+    diff /= maximum(diff)
+
+    return SampleBuf(diff, res.samplerate)
 end
 
 """
@@ -48,6 +51,8 @@ function groupdelayfeature(sample::SampleBuf; windowsize=0.01, windowoverlap=0.0
     end
     res = mapwindows(processwindow, sample, windowsize, windowoverlap; windowfunc=windowfunc)
 
+    res.data /= maximum(res.data)
+
     return res
 end
 
@@ -56,11 +61,8 @@ function bin2freq(bin, samplerate, nfft)
 end
 
 function spectralcenter(xs::Array, samplerate::Number)
-    #idx = weightedmedian(abs.(rfft(xs)))
-    #return bin2freq(idx, samplerate, length(xs))
-    mag = abs.(rfft(xs))
-    frq = rfftfreq(length(xs), samplerate)
-    return sum(frq .* mag) / sum(mag)
+    idx = weightedmedian(abs.(rfft(xs)))
+    return bin2freq(idx, samplerate, length(xs))
 end
 
 """
@@ -78,7 +80,10 @@ function spectralcenterfeature(sample::SampleBuf; windowsize=0.01, windowoverlap
     end
     res = mapwindows(processwindow, sample, windowsize, windowoverlap; windowfunc=windowfunc)
 
-    return SampleBuf(fdiff(res.data), res.samplerate)
+    diff = fdiff(res.data)
+    diff /= maximum(diff)
+
+    return SampleBuf(diff, res.samplerate)
 end
 
 function spectraldispersion(xs::Array, samplerate::Number)
@@ -103,7 +108,10 @@ function spectraldispersionfeature(sample::SampleBuf; windowsize=0.01, windowove
     end
     res = mapwindows(processwindow, sample, windowsize, windowoverlap; windowfunc=windowfunc)
 
-    return SampleBuf(fdiff(res.data), res.samplerate)
+    diff = fdiff(res.data)
+    diff /= maximum(diff)
+
+    return SampleBuf(diff, res.samplerate)
 end
 
 function mapwindows(func, sample::SampleBuf, windowsize, windowoverlap; windowfunc=DSP.rect)::SampleBuf
