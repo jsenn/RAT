@@ -64,3 +64,7 @@ function weightedmedian(xs; residual=false)
     @assert(imin != 0 && isfinite(resmin))
     return residual ? (imin, resmin) : imin
 end
+
+function bernoulli(p::Number)
+    Int(rand() < p)
+end
