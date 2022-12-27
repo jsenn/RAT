@@ -15,8 +15,8 @@ See Rhythm and Transforms p. 105-106
 function energyfeature(sample::SampleBuf; windowsize=1024, windowoverlap=div(windowsize,2), windowfunc=DSP.hanning)
     res = mapwindows(w -> sum(w.^2), sample, windowsize, windowoverlap; windowfunc=windowfunc)
 
+    normalize!(res.data)
     diff = fdiff(res.data)
-    diff /= maximum(diff)
 
     return SampleBuf(diff, res.samplerate)
 end
@@ -29,16 +29,18 @@ TBW
 function groupdelayfeature(sample::SampleBuf; windowsize=1024, windowoverlap=div(windowsize,2), windowfunc=DSP.hanning)
     function processwindow(window)
         coeffs = rfft(window)
+        freqs = rfftfreq(length(window), sample.samplerate)
         phases = unwrap(map(angle, coeffs))
         # fit a line to the unwrapped phases, returning the slope
-        poly = Polynomials.fit(1:lastindex(phases), phases, 1)
-        return poly.coeffs[1]
+        poly = Polynomials.fit(freqs, phases, 1)
+        return poly.coeffs[2]
     end
     res = mapwindows(processwindow, sample, windowsize, windowoverlap; windowfunc=windowfunc)
 
-    res.data /= maximum(res.data)
+    normalize!(res.data)
+    diff = fdiff(res.data)
 
-    return res
+    return SampleBuf(diff, res.samplerate)
 end
 
 function bin2freq(bin, samplerate, nfft)
@@ -69,8 +71,8 @@ function spectralcenterfeature(sample::SampleBuf; windowsize=1024, windowoverlap
     end
     res = mapwindows(processwindow, sample, windowsize, windowoverlap; windowfunc=windowfunc)
 
+    normalize!(res.data)
     diff = fdiff(res.data)
-    diff /= maximum(diff)
 
     return SampleBuf(diff, res.samplerate)
 end
@@ -97,8 +99,8 @@ function spectraldispersionfeature(sample::SampleBuf; windowsize=1024, windowove
     end
     res = mapwindows(processwindow, sample, windowsize, windowoverlap; windowfunc=windowfunc)
 
+    normalize!(res.data)
     diff = fdiff(res.data)
-    diff /= maximum(diff)
 
     return SampleBuf(diff, res.samplerate)
 end

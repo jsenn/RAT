@@ -1,3 +1,5 @@
+using Distributions
+
 """
     partialsum(xs)
 
@@ -65,6 +67,59 @@ function weightedmedian(xs; residual=false)
     return residual ? (imin, resmin) : imin
 end
 
+function normalize!(xs::Array)
+    if isempty(xs)
+        return
+    end
+    m = minimum(xs)
+    M = maximum(xs)
+    if m == M
+        fill!(xs, 0)
+    else
+        map!(x->(x-m)/(M-m), xs, xs)
+    end
+end
+
+function normalize_audio!(xs::Array{T}) where T<:AbstractFloat
+    if isempty(xs)
+        return
+    end
+
+    m = minimum(xs)
+    M = maximum(xs)
+    if m == M
+        fill!(xs, T(0.))
+    else
+        s = LinearScale(m, M, T(-1.), T(1.))
+        map!(s, xs, xs)
+    end
+end
+
+struct LinearScale{T<:AbstractFloat}
+    fromlow::T
+    fromhigh::T
+    tolow::T
+    tohigh::T
+end
+
+function evaluate(s::LinearScale{T}, t::T) where T<:AbstractFloat
+    param = (t-s.fromlow)/(s.fromhigh-s.fromlow)
+    return s.tolow + param * (s.tohigh - s.tolow)
+end
+
+function invert(s::LinearScale{T}, t::T) where T<:AbstractFloat
+    param = (t-s.tolow)/(s.tohigh-s.tolow)
+    return s.fromlow + param * (s.fromhigh - s.fromlow)
+end
+
+function (s::LinearScale{T})(t::T) where T<:AbstractFloat
+    evaluate(s, t)
+end
+
 function bernoulli(p::Number)
     Int(rand() < p)
+end
+
+function gaussian(u = 0, s = 1)
+    return rand(Normal(u,s))
 end
