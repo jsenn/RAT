@@ -120,6 +120,11 @@ function bernoulli(p::Number)
     Int(rand() < p)
 end
 
-function gaussian(u = 0, s = 1)
+function gaussian(u=0.0, s=1.0)
     return rand(Normal(u,s))
+end
+
+function gaussianpulse(x::Real; u=0.0, s=1.0, shift=0.0, height=1.0)
+    scale = height * s * sqrt(2pi)
+    return shift + scale * pdf(Normal(u, s), x)
 end
