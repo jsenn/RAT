@@ -1,5 +1,7 @@
 include("util.jl")
 
+using SampledSignals
+
 """
     urnseqi(i, qlarge, qsmall, period, phase=1)
 
@@ -63,4 +65,47 @@ function urnseq_ll(seq, qlarge, qsmall, period, phase)
     ll_small = ll(qsmall, num_ones_small, num_zeros_small)
 
     return ll_large + ll_small
+end
+
+function urnseq2q(t, qlarge, qsmall, period, phase; width=period/20)
+    phase = phase % period
+    # TODO: this is asymmetrical if right on a spike, but the
+    #       contribution of the next spike should be ~0 anyway...
+    prev_spike_idx = div((t-phase), period)
+    next_spike_idx = prev_spike_idx + 1
+    tprev = phase + prev_spike_idx * period
+    tnext = phase + next_spike_idx * period
+    prevpulse = gaussianpulse(t; u=tprev, s=width, shift=0, height=qlarge-qsmall)
+    nextpulse = gaussianpulse(t; u=tnext, s=width, shift=0, height=qlarge-qsmall)
+    return qsmall + prevpulse + nextpulse
+end
+
+function urnseq2t(t, qlarge, qsmall, period, phase; width=period/20)
+    prob = urnseq2q(t, qlarge, qsmall, period, phase; width=width)
+    return bernoulli(prob)
+end
+
+"""
+    urnseq2(duration, qlarge, qsmall, period, phase, width=period/20; samplerate=86)
+
+This can be thought of as a version of urnseq() where the onsets don't always fall
+exactly on grid points. To make that work, the sequence is defined in continuous
+(sampled) time. Onsets will tend to cluster around grid points, but the clustering
+will be inexact unless width is 0.
+
+Unlike urnseq(), this returns a SampleBuf.
+
+See Rhythm and Transforms p. 182-183
+"""
+function urnseq2(duration, qlarge, qsmall, period, phase, width=period/20; samplerate=86)
+    length = Int(ceil(duration * samplerate))
+    t = (0:length-1) / samplerate
+    samples = urnseq2t.(t, qlarge, qsmall, period, phase; width=width)
+    return SampleBuf(samples, samplerate)
+end
+
+function urnseq2_ll(buf, qlarge, qsmall, period, phase, width=period/20)
+    t = (0:length(buf.data)-1)/buf.samplerate
+    probs = urnseq2q.(t, qlarge, qsmall, period, phase; width=width)
+    return sum(buf.data .* log.(probs) .+ (1 .- buf.data) .* log.(1 .- probs))
 end
