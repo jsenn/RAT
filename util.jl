@@ -128,3 +128,9 @@ function gaussianpulse(x::Real; u=0.0, s=1.0, shift=0.0, height=1.0)
     scale = height * s * sqrt(2pi)
     return shift + scale * pdf(Normal(u, s), x)
 end
+
+function threshold!(xs::AbstractArray, threshold::Number)
+    for i = 1:lastindex(xs)
+        xs[i] = xs[i] >= threshold ? 1 : 0
+    end
+end

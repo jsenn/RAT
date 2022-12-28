@@ -115,8 +115,40 @@ end
 Returns the log likelihood that the data in buf was obtained by calling unknown_fixed_grid_seq with the
 given parameters.
 """
-function unknown_fixed_grid_seq_ll(buf, qlarge, qsmall, period, phase, width=period/20)
-    t = (0:length(buf.data)-1)/buf.samplerate
+function unknown_fixed_grid_seq_ll(data, samplerate, qlarge, qsmall, period, phase, width=period/20)
+    t = (0:length(data)-1)/samplerate
     probs = unknown_fixed_grid_seq_q.(t, qlarge, qsmall, period, phase; width=width)
-    return sum(buf.data .* log.(probs) .+ (1 .- buf.data) .* log.(1 .- probs))
+    return sum(data .* log.(probs) .+ (1 .- data) .* log.(1 .- probs))
+end
+
+function infer_unknown_fixed_grid_seq(buf::SampleBuf; minbpm=40, maxbpm=200, bpmres=5, phaseres=60/(maxbpm*4))
+    periods = 60 ./ (minbpm:bpmres:maxbpm)
+    bestperiod = nothing
+    bestphase = nothing
+    bestll = -Inf
+    for period in periods
+        for phase in 0:phaseres:period
+            ll = unknown_fixed_grid_seq_ll(buf.data, buf.samplerate, 0.75, 0.1, period, phase)
+            if ll > bestll
+                bestll = ll
+                bestperiod = period
+                bestphase = phase
+                println(60/bestperiod, '\t', bestphase, '\t', bestll)
+            end
+        end
+    end
+
+    return (60/bestperiod, bestphase, bestll)
+end
+
+function tosymbolic!(featurevec::SampleBuf; percentile=0.5)
+    map!(abs, featurevec, featurevec)
+    threshold = quantile(featurevec, percentile)
+    threshold!(featurevec, threshold)
+end
+
+function tosymbolic(featurevec::SampleBuf; percentile=0.5)
+    ret = copy(featurevec)
+    tosymbolic!(ret; percentile=percentile)
+    return ret
 end
