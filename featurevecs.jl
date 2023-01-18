@@ -3,6 +3,7 @@ include("util.jl")
 
 using FFTW
 using Polynomials
+using StatsBase
 
 """
     energyfeature(sample::SampleBuf; windowsize=0.01s, windowoverlap=0.005s)
@@ -120,7 +121,7 @@ function mapwindows(func, sample::SampleBuf, windowsize, windowoverlap; windowfu
     return SampleBuf(featuredata, featurefreq)
 end
 
-function normalize_feature!(feature::SampleBuf)
+function normalize_feature!(feature::Array)
     percentiles = nquantile(feature, 100)
 
     median = percentiles[51]
@@ -130,7 +131,7 @@ function normalize_feature!(feature::SampleBuf)
     highrange = high - median
     range = max(lowrange, highrange)
 
-    map!(x -> (clamp(x, low, high) - median) / range, feature.data, feature.data)
+    map!(x -> (clamp(x, low, high) - median) / range, feature, feature)
 end
 
 """

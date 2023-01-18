@@ -148,7 +148,7 @@ end
 function btfeatures(rawaudio::SampleBuf)
     return [
         energyfeature(rawaudio),
-        groupdelayfeature(rawaudio),
+        #groupdelayfeature(rawaudio),
         spectralcenterfeature(rawaudio),
         spectraldispersionfeature(rawaudio)
     ]
