@@ -17,6 +17,7 @@ function energyfeature(sample::SampleBuf; windowsize=1024, windowoverlap=div(win
 
     normalize!(res.data)
     diff = fdiff(res.data)
+    normalize_feature!(diff)
 
     return SampleBuf(diff, res.samplerate)
 end
@@ -39,6 +40,7 @@ function groupdelayfeature(sample::SampleBuf; windowsize=1024, windowoverlap=div
 
     normalize!(res.data)
     diff = fdiff(res.data)
+    normalize_feature!(diff)
 
     return SampleBuf(diff, res.samplerate)
 end
@@ -73,6 +75,7 @@ function spectralcenterfeature(sample::SampleBuf; windowsize=1024, windowoverlap
 
     normalize!(res.data)
     diff = fdiff(res.data)
+    normalize_feature!(diff)
 
     return SampleBuf(diff, res.samplerate)
 end
@@ -101,6 +104,7 @@ function spectraldispersionfeature(sample::SampleBuf; windowsize=1024, windowove
 
     normalize!(res.data)
     diff = fdiff(res.data)
+    normalize_feature!(diff)
 
     return SampleBuf(diff, res.samplerate)
 end
@@ -114,6 +118,19 @@ function mapwindows(func, sample::SampleBuf, windowsize, windowoverlap; windowfu
     featuredata = map(seg -> func(window .* seg), as)
 
     return SampleBuf(featuredata, featurefreq)
+end
+
+function normalize_feature!(feature::SampleBuf)
+    percentiles = nquantile(feature, 100)
+
+    median = percentiles[51]
+    low = percentiles[2]
+    lowrange = median - low
+    high = percentiles[100]
+    highrange = high - median
+    range = max(lowrange, highrange)
+
+    map!(x -> (clamp(x, low, high) - median) / range, feature.data, feature.data)
 end
 
 """
